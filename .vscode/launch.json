@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Worker Desktop GUI",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/worker",
+      "env": {
+        "CGO_ENABLED": "0"
+      }
+    },
+    {
+      "name": "Worker Headless CLI",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/worker",
+      "args": ["--headless", "--gateway", "http://127.0.0.1:8000"],
+      "env": {
+        "CGO_ENABLED": "0"
+      }
+    }
+  ]
+}

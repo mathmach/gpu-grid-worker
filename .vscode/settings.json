@@ -1,0 +1,10 @@
+{
+  "go.toolsEnvVars": {
+    "CGO_ENABLED": "0"
+  },
+  "go.testEnvVars": {
+    "CGO_ENABLED": "0"
+  },
+  "editor.formatOnSave": true,
+  "files.eol": "\n"
+}

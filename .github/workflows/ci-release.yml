@@ -1,0 +1,103 @@
+name: CI & Verifiable Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Vet, Arch Ratchets & Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify gofmt formatting
+        shell: bash
+        run: |
+          unformatted=$(gofmt -l cmd pkg tests)
+          if [ -n "$unformatted" ]; then
+            echo "Unformatted Go files:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Run go vet (CGO_ENABLED=0)
+        env:
+          CGO_ENABLED: "0"
+        run: go vet ./...
+
+      - name: Run architecture, leak-guard, unit & integration tests
+        run: go test -race ./...
+
+  build-and-attest:
+    name: Reproducible Cross-OS Build & Provenance
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Compile windows/amd64 & linux/amd64 binaries (CGO_ENABLED=0)
+        env:
+          CGO_ENABLED: "0"
+        run: |
+          mkdir -p dist
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w -H=windowsgui" -o dist/gpu-worker-windows-amd64.exe ./cmd/worker
+          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/gpu-worker-linux-amd64 ./cmd/worker
+          (cd dist && sha256sum gpu-worker-windows-amd64.exe gpu-worker-linux-amd64 > SHA256SUMS)
+          cat dist/SHA256SUMS
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-worker-dist
+          path: |
+            dist/gpu-worker-windows-amd64.exe
+            dist/gpu-worker-linux-amd64
+            dist/SHA256SUMS
+
+      - name: Generate SLSA build provenance attestation on tagged releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/gpu-worker-windows-amd64.exe
+            dist/gpu-worker-linux-amd64
+
+      - name: Publish GitHub Release on SemVer tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            dist/gpu-worker-windows-amd64.exe \
+            dist/gpu-worker-linux-amd64 \
+            dist/SHA256SUMS \
+            --generate-notes

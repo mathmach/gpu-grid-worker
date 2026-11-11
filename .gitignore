@@ -1,0 +1,9 @@
+dist/
+*.exe
+*.out
+*.test
+coverage.*
+.env
+.env.*
+go.work
+go.work.sum

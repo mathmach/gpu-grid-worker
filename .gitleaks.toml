@@ -1,0 +1,16 @@
+title = "GPU Grid Worker Secret Scan"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "gpu-grid-worker-token"
+description = "GPU Grid Worker Authentication Token"
+regex = '''\bwk_[A-Za-z0-9_-]{24,}\b'''
+tags = ["secret", "worker"]
+
+[[rules]]
+id = "huggingface-access-token"
+description = "Hugging Face Access Token"
+regex = '''\bhf_[A-Za-z0-9]{24,}\b'''
+tags = ["secret", "huggingface"]
