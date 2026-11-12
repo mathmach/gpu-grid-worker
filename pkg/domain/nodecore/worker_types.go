@@ -181,6 +181,9 @@ type WorkerAccountAuth struct {
 
 type WorkerPersistedConfig struct {
 	GatewayURL       string   `json:"gatewayUrl"`
+	GatewayPinned    bool     `json:"gatewayPinned,omitempty"`
+	BootstrapVersion uint64   `json:"bootstrapVersion,omitempty"`
+	BootstrapURLs    []string `json:"bootstrapUrls,omitempty"`
 	WorkerToken      string   `json:"workerToken"`
 	AccountEmail     string   `json:"accountEmail,omitempty"`
 	WorkerName       string   `json:"workerName"`

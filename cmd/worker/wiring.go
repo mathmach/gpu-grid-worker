@@ -73,7 +73,9 @@ func buildWorkerEngine(bootCfg workerconfig.WorkerConfig, hw worker.HardwareInsp
 	return worker.NewEngine(worker.Dependencies{
 		Boot: worker.BootConfig{
 			GatewayURL: bootCfg.GatewayURL, EmbeddedGatewayURL: bootCfg.EmbeddedGatewayURL,
-			Token: bootCfg.Token, WorkerName: bootCfg.WorkerName,
+			BootstrapURLs: bootCfg.BootstrapURLs, BootstrapURLsExplicit: bootCfg.BootstrapURLsExplicit,
+			BootstrapPublicKeys: bootCfg.BootstrapPublicKeys,
+			Token:               bootCfg.Token, WorkerName: bootCfg.WorkerName,
 			Devices: bootCfg.Devices, ModelMode: bootCfg.ModelMode, SelectedModels: bootCfg.SelectedModels,
 			EnabledBackends: bootBackends, AllowInsecureWS: bootCfg.InsecureWS,
 			CDNModelsBaseURL: bootCfg.CDNModelsBaseURL, ScheduleMode: bootCfg.ScheduleMode,
@@ -86,7 +88,7 @@ func buildWorkerEngine(bootCfg workerconfig.WorkerConfig, hw worker.HardwareInsp
 		Tunnel: tunnelDialerAdapter{inner: tunnel.NewWSClientDialer()}, Archive: casAdapter,
 		ModelCache: casAdapter, CacheInventory: casAdapter,
 		ConfigStore:   workerconfig.NewWorkerConfigStore(bootCfg.DataDir, bootCfg.ConfigPath),
-		GatewayClient: gatewayCli, Portal: gatewayCli, Browser: cas.NewOSBrowserLauncher(),
+		GatewayClient: gatewayCli, Portal: gatewayCli, Bootstrap: gatewayCli, Browser: cas.NewOSBrowserLauncher(),
 		RuntimeFS: runtimeFS, Loopback: loopbackTransport, LoopbackRelay: loopbackTransport, Logger: logger,
 	})
 }

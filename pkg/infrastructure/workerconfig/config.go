@@ -17,6 +17,9 @@ import (
 type WorkerConfig struct {
 	GatewayURL              string
 	EmbeddedGatewayURL      string
+	BootstrapURLs           []string
+	BootstrapURLsExplicit   bool
+	BootstrapPublicKeys     []string
 	Token                   string
 	WorkerName              string
 	Devices                 []string
@@ -43,6 +46,7 @@ type WorkerConfig struct {
 
 type workerEnvSpec struct {
 	GatewayURL          string
+	BootstrapURLs       string
 	GridWorkerToken     string
 	FallbackToken       string
 	WorkerName          string
@@ -97,6 +101,7 @@ func readWorkerEnvSpec(lookup func(string) (string, bool)) (workerEnvSpec, error
 	}
 	return workerEnvSpec{
 		GatewayURL:          getStr("GPU_GRID_GATEWAY"),
+		BootstrapURLs:       getStr("GPU_GRID_BOOTSTRAP_URL"),
 		GridWorkerToken:     getStr("GRID_WORKER_TOKEN"),
 		FallbackToken:       getStr("GPU_GRID_TOKEN"),
 		WorkerName:          getStr("GPU_GRID_NAME"),
@@ -172,12 +177,14 @@ func LoadWorkerConfig(args []string) (WorkerConfig, error) {
 	var devsRaw string
 	var modelsRaw string
 	var backendsRaw string
+	var bootstrapRaw string
 	prevDataDir := cfg.DataDir
 	prevConfigPath := cfg.ConfigPath
 	soloBootSec := int(cfg.SoloEngineBootTimeout / time.Second)
 	defaultBackendsCSV := strings.Join(cfg.EnabledBackends, ",")
 	fs := flag.NewFlagSet("gpu-worker", flag.ContinueOnError)
 	fs.StringVar(&cfg.GatewayURL, "gateway", cfg.GatewayURL, "gateway HTTP URL")
+	fs.StringVar(&bootstrapRaw, "bootstrap-url", strings.TrimSpace(spec.BootstrapURLs), "comma-separated signed network bootstrap manifest URLs")
 	fs.StringVar(&cfg.Token, "token", cfg.Token, "account worker token (wk_...)")
 	fs.StringVar(&cfg.WorkerName, "name", cfg.WorkerName, "worker machine label")
 	fs.StringVar(&devsRaw, "devices", strings.TrimSpace(spec.Devices), "comma-separated Vulkan GPU IDs or 'all'")
@@ -213,7 +220,7 @@ func LoadWorkerConfig(args []string) (WorkerConfig, error) {
 	if cfg.DataDir != prevDataDir && cfg.ConfigPath == prevConfigPath {
 		cfg.ConfigPath = filepath.Join(filepath.Clean(cfg.DataDir), "config.json")
 	}
-	if err := applyParsedWorkerFlags(&cfg, devsRaw, modelsRaw, backendsRaw, idleFlagExplicit); err != nil {
+	if err := applyParsedWorkerFlags(&cfg, devsRaw, modelsRaw, backendsRaw, bootstrapRaw, idleFlagExplicit); err != nil {
 		return WorkerConfig{}, err
 	}
 	return cfg, nil
@@ -234,10 +241,18 @@ func defaultWorkerConfig(args []string, spec workerEnvSpec) WorkerConfig {
 		backends = defaultEnabledBackends()
 	}
 	cdnModels := strings.TrimRight(cmp.Or(strings.TrimSpace(spec.WorkerCDNModels), strings.TrimSpace(spec.FallbackCDN)), "/")
+	embedded := readCurrentExeBootstrapPayload()
+	bootstrapURLs := nodecore.DefaultNetworkBootstrapURLs()
+	if len(embedded.BootstrapURLs) > 0 {
+		bootstrapURLs = append([]string(nil), embedded.BootstrapURLs...)
+	}
+	pubKeys := mergeDefaultAndEmbeddedBootstrapKeys(embedded.BootstrapPublicKeys)
 
 	return WorkerConfig{
 		GatewayURL:              strings.TrimSpace(spec.GatewayURL),
-		EmbeddedGatewayURL:      readCurrentExeBootstrapGatewayURL(),
+		EmbeddedGatewayURL:      embedded.GatewayURL,
+		BootstrapURLs:           bootstrapURLs,
+		BootstrapPublicKeys:     pubKeys,
 		Token:                   envTok,
 		WorkerName:              strings.TrimSpace(spec.WorkerName),
 		CDNModelsBaseURL:        cdnModels,
@@ -256,36 +271,55 @@ func defaultWorkerConfig(args []string, spec workerEnvSpec) WorkerConfig {
 	}
 }
 
-func readCurrentExeBootstrapGatewayURL() string {
+func mergeDefaultAndEmbeddedBootstrapKeys(embeddedKeys []string) []string {
+	combined := make([]string, 0, 1+len(embeddedKeys))
+	combined = append(combined, nodecore.DefaultNetworkBootstrapPublicKeyHex)
+	combined = append(combined, embeddedKeys...)
+	norm, err := nodecore.NormalizeBootstrapPublicKeyList(combined)
+	if err != nil || len(norm) == 0 {
+		return []string{nodecore.DefaultNetworkBootstrapPublicKeyHex}
+	}
+	return norm
+}
+
+func readCurrentExeBootstrapPayload() nodecore.WorkerBootstrapPayload {
 	exe, err := os.Executable()
 	if err != nil || strings.TrimSpace(exe) == "" {
-		return ""
+		return nodecore.WorkerBootstrapPayload{}
 	}
-	return ReadExecutableBootstrapGatewayURL(exe)
+	payload, ok := ReadExecutableBootstrapPayload(exe)
+	if !ok {
+		return nodecore.WorkerBootstrapPayload{}
+	}
+	return payload
 }
 
 func ReadExecutableBootstrapGatewayURL(exePath string) string {
+	payload, ok := ReadExecutableBootstrapPayload(exePath)
+	if !ok {
+		return ""
+	}
+	return payload.GatewayURL
+}
+
+func ReadExecutableBootstrapPayload(exePath string) (nodecore.WorkerBootstrapPayload, bool) {
 	f, err := os.Open(strings.TrimSpace(exePath))
 	if err != nil {
-		return ""
+		return nodecore.WorkerBootstrapPayload{}, false
 	}
 	defer f.Close()
 
 	st, err := f.Stat()
 	if err != nil || st.IsDir() || st.Size() < 46 {
-		return ""
+		return nodecore.WorkerBootstrapPayload{}, false
 	}
 	readLen := min(st.Size(), int64(nodecore.MaxWorkerBootstrapTailBytes))
 	buf := make([]byte, readLen)
 	n, err := f.ReadAt(buf, st.Size()-readLen)
 	if n <= 0 || (err != nil && n < len(buf)) {
-		return ""
+		return nodecore.WorkerBootstrapPayload{}, false
 	}
-	gw, ok := nodecore.DecodeWorkerBootstrapTrailer(buf[:n])
-	if !ok {
-		return ""
-	}
-	return gw
+	return nodecore.DecodeWorkerBootstrapPayload(buf[:n])
 }
 
 func resolveWorkerSoloBootTimeout(spec workerEnvSpec) time.Duration {
@@ -312,7 +346,7 @@ func derefBoolOr(ptr *bool, def bool) bool {
 	return def
 }
 
-func applyParsedWorkerFlags(cfg *WorkerConfig, devsRaw, modelsRaw, backendsRaw string, idleFlagExplicit bool) error {
+func applyParsedWorkerFlags(cfg *WorkerConfig, devsRaw, modelsRaw, backendsRaw, bootstrapRaw string, idleFlagExplicit bool) error {
 	if err := validateWorkerNumericBounds(cfg, idleFlagExplicit); err != nil {
 		return err
 	}
@@ -323,6 +357,14 @@ func applyParsedWorkerFlags(cfg *WorkerConfig, devsRaw, modelsRaw, backendsRaw s
 			return err
 		}
 		cfg.GatewayURL = normURL
+	}
+	if rawBoot := splitCSV(bootstrapRaw); len(rawBoot) > 0 {
+		normBoot, err := nodecore.NormalizeBootstrapDiscoveryURLList(rawBoot, cfg.InsecureWS)
+		if err != nil {
+			return err
+		}
+		cfg.BootstrapURLs = normBoot
+		cfg.BootstrapURLsExplicit = true
 	}
 	if cfg.Headless {
 		cfg.HasDesktopDisplay = false

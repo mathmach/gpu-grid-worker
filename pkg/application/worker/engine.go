@@ -34,6 +34,7 @@ type Engine struct {
 	configStore       ConfigStore
 	gatewayClient     GatewayClient
 	portal            WorkerPortalPort
+	bootstrap         NetworkBootstrapPort
 	browser           BrowserLauncher
 	runtimeFS         RuntimeFS
 	loopback          LoopbackTransport
@@ -46,6 +47,7 @@ type Engine struct {
 
 	lifecycleMu sync.Mutex
 	settingsMu  sync.Mutex
+	bootstrapMu sync.Mutex
 	pauseMu     sync.Mutex
 	runtimeMu   sync.Mutex
 	meshPeerMu  sync.Mutex
@@ -58,79 +60,85 @@ type Engine struct {
 	nextSubID   uint64
 	subscribers map[uint64]chan Snapshot
 
-	language               string
-	uiMode                 string
-	currency               nodecore.DisplayCurrency
-	gatewayURL             string
-	workerToken            string
-	workerName             string
-	accountEmail           string
-	browserAuth            *pendingBrowserAuth
-	lastCompletedAuthState string
-	preDownloadModelID     string
-	preDownloadPct         int
-	preDownloadIndex       int
-	preDownloadTotal       int
-	poolID                 string
-	poolRole               string
-	meshRole               string
-	executionMode          string
-	soloStatus             string
-	soloModelID            string
-	cachedModelSHA256s     []string
-	diskFreeMiB            int
-	diskFreeProbed         bool
-	probedBackends         []string
-	remotePackBackends     []string
-	enabledBackends        []string
-	enabledBackendsSet     bool
-	orderBookRank          int
-	rttMs                  int64
-	clearingPer1M          float64
-	modelMode              string
-	selectedModels         []string
-	activeModelID          string
-	waitingReason          string
-	missingVramMiB         int
-	catalogModels          []protocol.CatalogModelView
-	scheduleMode           string
-	scheduleConfigured     bool
-	idleThresholdSec       int
-	idleStatus             string
-	idleUnavailableLogged  bool
-	manualPaused           bool
-	autoPaused             bool
-	pauseDraining          bool
-	drainGen               uint64
-	drainCancel            context.CancelFunc
-	idleSeconds            int
-	reliabilityPct         float64
-	detectedGPUs           []protocol.GpuInfo
-	selectedIDs            []string
-	running                bool
-	status                 string
-	sessionState           nodecore.WorkerSessionState
-	assignedLayers         int
-	totalLayers            int
-	sharePct               float64
-	blocksProcessed        int64
-	tokensProcessed        int64
-	computeUnitsProcessed  int64
-	priorBlocks            int64
-	priorTokens            int64
-	priorComputeUnits      int64
-	sessStateBlocks        int64
-	sessStateTokens        int64
-	sessStateComputeUnits  int64
-	sessCreditBlocks       int64
-	sessCreditTokens       int64
-	sessCreditComputeUnits int64
-	lastWorkerStateSeq     uint64
-	lastStateSeq           uint64
-	minObservedBalance     float64
-	balance                float64
-	lastError              string
-	logs                   []string
+	language                string
+	uiMode                  string
+	currency                nodecore.DisplayCurrency
+	gatewayURL              string
+	bootGatewayPinned       bool
+	gatewayPinned           bool
+	bootstrapVersion        uint64
+	bootstrapURLs           []string
+	discoveredBootstrapURLs []string
+	bootstrapPubKeys        []string
+	workerToken             string
+	workerName              string
+	accountEmail            string
+	browserAuth             *pendingBrowserAuth
+	lastCompletedAuthState  string
+	preDownloadModelID      string
+	preDownloadPct          int
+	preDownloadIndex        int
+	preDownloadTotal        int
+	poolID                  string
+	poolRole                string
+	meshRole                string
+	executionMode           string
+	soloStatus              string
+	soloModelID             string
+	cachedModelSHA256s      []string
+	diskFreeMiB             int
+	diskFreeProbed          bool
+	probedBackends          []string
+	remotePackBackends      []string
+	enabledBackends         []string
+	enabledBackendsSet      bool
+	orderBookRank           int
+	rttMs                   int64
+	clearingPer1M           float64
+	modelMode               string
+	selectedModels          []string
+	activeModelID           string
+	waitingReason           string
+	missingVramMiB          int
+	catalogModels           []protocol.CatalogModelView
+	scheduleMode            string
+	scheduleConfigured      bool
+	idleThresholdSec        int
+	idleStatus              string
+	idleUnavailableLogged   bool
+	manualPaused            bool
+	autoPaused              bool
+	pauseDraining           bool
+	drainGen                uint64
+	drainCancel             context.CancelFunc
+	idleSeconds             int
+	reliabilityPct          float64
+	detectedGPUs            []protocol.GpuInfo
+	selectedIDs             []string
+	running                 bool
+	status                  string
+	sessionState            nodecore.WorkerSessionState
+	assignedLayers          int
+	totalLayers             int
+	sharePct                float64
+	blocksProcessed         int64
+	tokensProcessed         int64
+	computeUnitsProcessed   int64
+	priorBlocks             int64
+	priorTokens             int64
+	priorComputeUnits       int64
+	sessStateBlocks         int64
+	sessStateTokens         int64
+	sessStateComputeUnits   int64
+	sessCreditBlocks        int64
+	sessCreditTokens        int64
+	sessCreditComputeUnits  int64
+	lastWorkerStateSeq      uint64
+	lastStateSeq            uint64
+	minObservedBalance      float64
+	balance                 float64
+	lastError               string
+	logs                    []string
 
 	runGen         uint64
 	loopDone       chan struct{}
@@ -172,6 +180,7 @@ func NewEngine(deps Dependencies) *Engine {
 		hostPID:           hostPID,
 		controlPort:       ctrlPort,
 		dataDir:           dataDir,
+		allowInsecureWS:   boot.AllowInsecureWS,
 		hardware:          deps.Hardware,
 		idle:              deps.Idle,
 		rpc:               deps.RPC,
@@ -183,6 +192,7 @@ func NewEngine(deps Dependencies) *Engine {
 		configStore:       deps.ConfigStore,
 		gatewayClient:     deps.GatewayClient,
 		portal:            deps.Portal,
+		bootstrap:         deps.Bootstrap,
 		browser:           deps.Browser,
 		runtimeFS:         deps.RuntimeFS,
 		loopback:          deps.Loopback,
@@ -207,6 +217,7 @@ func NewEngine(deps Dependencies) *Engine {
 	}
 	eng.cachedIdleSec.Store(int64(idleInitial))
 	eng.cleanupLegacyStagingDirs()
+	eng.initBootstrapConfig(boot)
 	if strings.TrimSpace(boot.EmbeddedGatewayURL) != "" {
 		if normEmb, err := eng.validateAndNormalizeGateway(boot.EmbeddedGatewayURL); err == nil {
 			eng.gatewayURL = normEmb
@@ -405,6 +416,8 @@ func (e *Engine) buildSnapshotLocked() StatusSnapshot {
 		Arch:                  runtime.GOARCH,
 		MachineID:             e.machineID,
 		GatewayURL:            e.gatewayURL,
+		GatewayPinned:         e.gatewayPinned || e.bootGatewayPinned,
+		BootstrapVersion:      e.bootstrapVersion,
 		WorkerToken:           e.workerToken,
 		HasWorkerToken:        strings.TrimSpace(e.workerToken) != "",
 		BrowserAuthPending:    e.browserAuth != nil && time.Now().UTC().Before(e.browserAuth.expiresAt),
@@ -528,6 +541,7 @@ func (e *Engine) startLocked(params StartParams) error {
 	if err := e.applyStartParams(params); err != nil {
 		return err
 	}
+	e.RefreshNetworkBootstrap(context.Background())
 
 	gwURL, tok, hasDetected, err := e.validatePreStartTokenAndGateway()
 	if err != nil {
@@ -663,6 +677,9 @@ func (e *Engine) validateStartModelAndSchedule(p StartParams) (nodecore.ModelSel
 
 func (e *Engine) applyStartIdentityFieldsLocked(p StartParams, normGW string) {
 	if normGW != "" {
+		if normGW != e.gatewayURL {
+			e.gatewayPinned = true
+		}
 		e.gatewayURL = normGW
 	}
 	if nextTok := strings.TrimSpace(p.WorkerToken); nextTok != "" {

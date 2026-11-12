@@ -14,6 +14,9 @@ import (
 type BootConfig struct {
 	GatewayURL            string
 	EmbeddedGatewayURL    string
+	BootstrapURLs         []string
+	BootstrapURLsExplicit bool
+	BootstrapPublicKeys   []string
 	Token                 string
 	WorkerName            string
 	Devices               []string
@@ -130,6 +133,10 @@ type WorkerPortalPort interface {
 	ResolvePreDownloadArtifacts(ctx context.Context, gwURL, workerToken string, modelIDs []string) ([]protocol.WorkerModelArtifactView, error)
 }
 
+type NetworkBootstrapPort interface {
+	FetchNetworkBootstrap(ctx context.Context, targetURL string) ([]byte, error)
+}
+
 type BrowserLauncher interface {
 	OpenExternalURL(targetURL string) error
 }
@@ -161,6 +168,7 @@ type Dependencies struct {
 	ConfigStore    ConfigStore
 	GatewayClient  GatewayClient
 	Portal         WorkerPortalPort
+	Bootstrap      NetworkBootstrapPort
 	Browser        BrowserLauncher
 	RuntimeFS      RuntimeFS
 	Loopback       LoopbackTransport

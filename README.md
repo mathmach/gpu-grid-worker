@@ -21,12 +21,16 @@ Every line of code that runs on a provider's workstation or server lives in this
    -Inference engines (`llama-server`, `ggml-rpc-server`, `diffusion`, `whisper`, and optional sidecars) run with sanitized environment variables (sensitive `*_TOKEN`, `*_SECRET`, and `*_PASSWORD` keys stripped) and deterministic teardown so zero orphan processes hold VRAM or ports on exit.
 4. **Outbound Reverse WebSocket Tunnel (`/ws/worker`)**:
    - Connects outbound over `wss://` (with `http://`/`ws://` restricted to loopback and RFC 1918 private LANs unless explicitly overridden for local testing) — zero inbound firewall port-forwarding required.
+5. **Cryptographic Dynamic Network Bootstrap (`Ed25519` Signed `network.json`)**:
+   - Discovers and updates the active Gateway endpoint across redundant HTTPS mirrors (`/.well-known/gpu-grid-network.json`, GitHub Pages, and GitHub Releases) verified against an embedded `Ed25519` root public key and monotonic anti-rollback `version` counter while preserving existing `wk_...` provider tokens across domain migrations.
+   - Explicit `--gateway` / `GPU_GRID_GATEWAY` flags and manual GUI / `PATCH /api/config` overrides pin the target endpoint (`gatewayPinned: true`) and bypass automatic discovery for private or offline deployments.
 
 ---
 
 ## Repository Layout
 
 - `cmd/worker` — Composition root for desktop GUI (`modernc.org/tk9.0`) and headless CLI modes.
+- `cmd/bootstrap-sign` — Offline `Ed25519` key generation, manifest signing, and verification utility for `network.json`.
 - `pkg/domain` — Pure standard-library domain types, finite state machines (`fsm`), W3C `traceparent` propagation (`trace`), typed error catalog (`derr`), and Worker port contracts (`nodecore`).
 - `pkg/protocol` — Canonical `ControlMsg` JSON frames and 4-byte Big-Endian binary stream framing (`solo_http`, `rpc`, `mesh_relay`).
 - `pkg/wsconn` — Concurrency-safe WebSocket writer (`writeMu` serialization).
@@ -80,6 +84,16 @@ CGO_ENABLED=0 go test -race ./...
   --devices Vulkan0 \
   --autostart \
   --headless
+
+# Sign and verify a dynamic network bootstrap manifest (network.json)
+go run ./cmd/bootstrap-sign \
+  -sign \
+  -key /path/to/network-bootstrap-ed25519.json \
+  -gateway https://api.example.com \
+  -version 1 \
+  -out network.json
+
+go run ./cmd/bootstrap-sign -verify -in network.json
 ```
 
 ---

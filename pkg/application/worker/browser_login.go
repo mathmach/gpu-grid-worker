@@ -30,7 +30,7 @@ func (e *Engine) StartBrowserLogin(gatewayURLOverride string) (string, error) {
 	e.settingsMu.Lock()
 	defer e.settingsMu.Unlock()
 
-	normGW, machineID, workerName, port, err := e.prepareBrowserLoginContext(gatewayURLOverride)
+	normGW, pinGateway, machineID, workerName, port, err := e.prepareBrowserLoginContext(gatewayURLOverride)
 	if err != nil {
 		e.setLastError(err.Error())
 		return "", err
@@ -56,6 +56,9 @@ func (e *Engine) StartBrowserLogin(gatewayURLOverride string) (string, error) {
 	}
 	prevCancel := e.clearPendingBrowserAuthLocked()
 	lang := e.language
+	if pinGateway {
+		e.gatewayPinned = true
+	}
 	e.gatewayURL = normGW
 	e.lastCompletedAuthState = ""
 	e.browserAuth = &pendingBrowserAuth{
@@ -181,6 +184,7 @@ func (e *Engine) consumeCompletedBrowserAuthSnapshot(rawCode, rawState string) (
 }
 
 func (e *Engine) OpenWithdrawPage() error {
+	e.RefreshNetworkBootstrap(context.Background())
 	e.mu.Lock()
 	gw := e.gatewayURL
 	e.mu.Unlock()
@@ -316,30 +320,36 @@ func (e *Engine) finalizeBrowserLinkedAccount(gwURL string, authRes nodecore.Wor
 	return e.Snapshot(), nil
 }
 
-func (e *Engine) prepareBrowserLoginContext(gatewayURLOverride string) (string, string, string, int, error) {
+func (e *Engine) prepareBrowserLoginContext(gatewayURLOverride string) (string, bool, string, string, int, error) {
 	e.mu.Lock()
 	running := e.running
+	e.mu.Unlock()
+	if running {
+		return "", false, "", "", 0, derr.New(derr.CodeIllegalState, 409, "stop the worker before changing the linked account", nil)
+	}
+	explicitOverride := strings.TrimSpace(gatewayURLOverride) != ""
+	if !explicitOverride {
+		e.RefreshNetworkBootstrap(context.Background())
+	}
+	e.mu.Lock()
 	fallbackGW := e.gatewayURL
 	machineID := e.machineID
 	workerName := e.workerName
 	port := e.controlPort
 	e.mu.Unlock()
 
-	if running {
-		return "", "", "", 0, derr.New(derr.CodeIllegalState, 409, "stop the worker before changing the linked account", nil)
-	}
 	targetGW := cmp.Or(strings.TrimSpace(gatewayURLOverride), fallbackGW)
 	normGW, err := e.validateAndNormalizeGateway(targetGW)
 	if err != nil {
-		return "", "", "", 0, err
+		return "", false, "", "", 0, err
 	}
 	if _, wsErr := e.resolveWorkerWSURL(normGW); wsErr != nil {
-		return "", "", "", 0, wsErr
+		return "", false, "", "", 0, wsErr
 	}
 	if port <= 0 {
 		port = nodecore.DefaultWorkerControlPort
 	}
-	return normGW, machineID, workerName, port, nil
+	return normGW, explicitOverride && normGW != fallbackGW, machineID, workerName, port, nil
 }
 
 func (e *Engine) consumeMatchingBrowserAuth(rawCode, rawState string) (pendingBrowserAuth, string, error) {

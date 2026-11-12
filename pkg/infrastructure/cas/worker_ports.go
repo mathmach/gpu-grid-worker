@@ -76,18 +76,20 @@ func (a *WorkerCASAdapter) AvailableDiskMiB(cacheRoot string) (int, error) {
 }
 
 type HTTPGatewayClient struct {
-	manifestClient *http.Client
-	catalogClient  *http.Client
-	authClient     *http.Client
-	pollClient     *http.Client
+	bootstrapClient *http.Client
+	manifestClient  *http.Client
+	catalogClient   *http.Client
+	authClient      *http.Client
+	pollClient      *http.Client
 }
 
 func NewGatewayClient() *HTTPGatewayClient {
 	return &HTTPGatewayClient{
-		manifestClient: newSafeHTTPClient(4 * time.Second),
-		catalogClient:  newSafeHTTPClient(6 * time.Second),
-		authClient:     newSafeHTTPClient(8 * time.Second),
-		pollClient:     newSafeHTTPClient(18 * time.Second),
+		bootstrapClient: newSafeHTTPClient(2500 * time.Millisecond),
+		manifestClient:  newSafeHTTPClient(4 * time.Second),
+		catalogClient:   newSafeHTTPClient(6 * time.Second),
+		authClient:      newSafeHTTPClient(8 * time.Second),
+		pollClient:      newSafeHTTPClient(18 * time.Second),
 	}
 }
 

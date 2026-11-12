@@ -46,6 +46,13 @@ jobs:
       - name: Run architecture, leak-guard, unit & integration tests
         run: go test -race ./...
 
+      - name: Verify committed network bootstrap manifest if present
+        if: hashFiles('docs/network.json') != ''
+        shell: bash
+        env:
+          CGO_ENABLED: "0"
+        run: go run ./cmd/bootstrap-sign -verify -in docs/network.json
+
   build-and-attest:
     name: Reproducible Cross-OS Build & Provenance
     needs: verify
@@ -96,8 +103,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          extra_assets=()
+          if [ -f docs/network.json ]; then
+            cp docs/network.json dist/network.json
+            extra_assets+=("dist/network.json")
+          fi
           gh release create "${GITHUB_REF_NAME}" \
             dist/gpu-worker-windows-amd64.exe \
             dist/gpu-worker-linux-amd64 \
             dist/SHA256SUMS \
+            "${extra_assets[@]}" \
             --generate-notes

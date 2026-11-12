@@ -81,8 +81,9 @@ func runListDevicesMode(bootCfg workerconfig.WorkerConfig, hw worker.HardwareIns
 	runtimeDir := runtimeFS.FindExistingRuntime(bootCfg.DataDir, llamaBinaryName())
 	if runtimeDir == "" {
 		eng := buildWorkerEngine(bootCfg, hw, runtimeFS, observability.NewJSONLogger(os.Stderr))
+		eng.RefreshNetworkBootstrap(ctx)
 		var err error
-		runtimeDir, err = eng.EnsureRuntime(ctx, bootCfg.GatewayURL)
+		runtimeDir, err = eng.EnsureRuntime(ctx, eng.Snapshot().GatewayURL)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to prepare Vulkan runtime: %v\n", err)
 			return 1
@@ -136,6 +137,7 @@ func runInitialScanAndAutoStart(ctx context.Context, eng *worker.Engine, autoSta
 	if ctx.Err() != nil {
 		return
 	}
+	eng.RefreshNetworkBootstrap(ctx)
 	snap := eng.Snapshot()
 	if !autoStart && !snap.HasWorkerToken && eng.ResolveExistingRuntimeDir() == "" {
 		return

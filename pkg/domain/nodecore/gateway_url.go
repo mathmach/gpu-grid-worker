@@ -331,8 +331,10 @@ const (
 	MaxWorkerBootstrapTailBytes = maxBootstrapPayloadBytes + workerBootstrapFooterBytes
 )
 
-type workerBootstrapPayload struct {
-	GatewayURL string `json:"gatewayUrl"`
+type WorkerBootstrapPayload struct {
+	GatewayURL          string   `json:"gatewayUrl,omitempty"`
+	BootstrapURLs       []string `json:"bootstrapUrls,omitempty"`
+	BootstrapPublicKeys []string `json:"bootstrapPublicKeys,omitempty"`
 }
 
 func EncodeWorkerBootstrapTrailer(rawGatewayURL string) ([]byte, error) {
@@ -340,7 +342,32 @@ func EncodeWorkerBootstrapTrailer(rawGatewayURL string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	payload, err := json.Marshal(workerBootstrapPayload{GatewayURL: norm})
+	return EncodeWorkerBootstrapPayload(WorkerBootstrapPayload{GatewayURL: norm})
+}
+
+func EncodeWorkerBootstrapPayload(cfg WorkerBootstrapPayload) ([]byte, error) {
+	var normalized WorkerBootstrapPayload
+	if strings.TrimSpace(cfg.GatewayURL) != "" {
+		normGW, err := NormalizeGatewayURL(cfg.GatewayURL)
+		if err != nil {
+			return nil, err
+		}
+		normalized.GatewayURL = normGW
+	}
+	normURLs, err := NormalizeBootstrapDiscoveryURLList(cfg.BootstrapURLs, true)
+	if err != nil {
+		return nil, err
+	}
+	normKeys, err := NormalizeBootstrapPublicKeyList(cfg.BootstrapPublicKeys)
+	if err != nil {
+		return nil, err
+	}
+	normalized.BootstrapURLs = normURLs
+	normalized.BootstrapPublicKeys = normKeys
+	if normalized.GatewayURL == "" && len(normalized.BootstrapURLs) == 0 {
+		return nil, derr.New(derr.CodeValidation, 400, "worker bootstrap payload requires gatewayUrl or bootstrapUrls", nil)
+	}
+	payload, err := json.Marshal(normalized)
 	if err != nil {
 		return nil, err
 	}
@@ -358,30 +385,67 @@ func EncodeWorkerBootstrapTrailer(rawGatewayURL string) ([]byte, error) {
 }
 
 func DecodeWorkerBootstrapTrailer(tail []byte) (string, bool) {
-	if len(tail) < workerBootstrapFooterBytes+2 {
+	parsed, ok := DecodeWorkerBootstrapPayload(tail)
+	if !ok || parsed.GatewayURL == "" {
 		return "", false
+	}
+	return parsed.GatewayURL, true
+}
+
+func DecodeWorkerBootstrapPayload(tail []byte) (WorkerBootstrapPayload, bool) {
+	payload, ok := extractVerifiedBootstrapPayloadBytes(tail)
+	if !ok {
+		return WorkerBootstrapPayload{}, false
+	}
+	var parsed WorkerBootstrapPayload
+	if err := json.Unmarshal(payload, &parsed); err != nil {
+		return WorkerBootstrapPayload{}, false
+	}
+	return normalizeDecodedBootstrapPayload(parsed)
+}
+
+func extractVerifiedBootstrapPayloadBytes(tail []byte) ([]byte, bool) {
+	if len(tail) < workerBootstrapFooterBytes+2 {
+		return nil, false
 	}
 	metaStart := len(tail) - workerBootstrapFooterBytes
 	if string(tail[metaStart+36:]) != workerBootstrapMagic {
-		return "", false
+		return nil, false
 	}
 	payloadLen := int(binary.BigEndian.Uint32(tail[metaStart : metaStart+4]))
 	if payloadLen <= 0 || payloadLen > maxBootstrapPayloadBytes || metaStart < payloadLen {
-		return "", false
+		return nil, false
 	}
 	payload := tail[metaStart-payloadLen : metaStart]
 	expectedDigest := tail[metaStart+4 : metaStart+36]
 	actualDigest := sha256.Sum256(payload)
 	if subtle.ConstantTimeCompare(actualDigest[:], expectedDigest) != 1 {
-		return "", false
+		return nil, false
 	}
-	var parsed workerBootstrapPayload
-	if err := json.Unmarshal(payload, &parsed); err != nil {
-		return "", false
+	return payload, true
+}
+
+func normalizeDecodedBootstrapPayload(parsed WorkerBootstrapPayload) (WorkerBootstrapPayload, bool) {
+	var out WorkerBootstrapPayload
+	if strings.TrimSpace(parsed.GatewayURL) != "" {
+		normGW, err := NormalizeGatewayURL(parsed.GatewayURL)
+		if err != nil {
+			return WorkerBootstrapPayload{}, false
+		}
+		out.GatewayURL = normGW
 	}
-	norm, err := NormalizeGatewayURL(parsed.GatewayURL)
+	normURLs, err := NormalizeBootstrapDiscoveryURLList(parsed.BootstrapURLs, true)
 	if err != nil {
-		return "", false
+		return WorkerBootstrapPayload{}, false
 	}
-	return norm, true
+	normKeys, err := NormalizeBootstrapPublicKeyList(parsed.BootstrapPublicKeys)
+	if err != nil {
+		return WorkerBootstrapPayload{}, false
+	}
+	out.BootstrapURLs = normURLs
+	out.BootstrapPublicKeys = normKeys
+	if out.GatewayURL == "" && len(out.BootstrapURLs) == 0 {
+		return WorkerBootstrapPayload{}, false
+	}
+	return out, true
 }

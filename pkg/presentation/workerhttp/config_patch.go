@@ -16,6 +16,7 @@ import (
 
 type ConfigResponse struct {
 	GatewayURL        string   `json:"gatewayUrl"`
+	GatewayPinned     bool     `json:"gatewayPinned"`
 	WorkerName        string   `json:"workerName"`
 	AccountEmail      string   `json:"accountEmail,omitempty"`
 	HasWorkerToken    bool     `json:"hasWorkerToken"`
@@ -36,6 +37,7 @@ type ConfigResponse struct {
 
 type configPatch struct {
 	GatewayURL         *string   `json:"gatewayUrl"`
+	GatewayPinned      *bool     `json:"gatewayPinned"`
 	WorkerToken        *string   `json:"workerToken"`
 	WorkerName         *string   `json:"workerName"`
 	SelectedIDs        *[]string `json:"selectedIds"`
@@ -136,6 +138,7 @@ func applyPatchIdentity(upd *worker.UpdateSettings, patch configPatch) error {
 		upd.GatewayURLSet = true
 		upd.GatewayURL = normGW
 	}
+	upd.GatewayPinned = patch.GatewayPinned
 	if patch.WorkerToken != nil {
 		upd.WorkerTokenSet = true
 		upd.WorkerToken = *patch.WorkerToken
@@ -232,6 +235,7 @@ func (h *Handler) buildConfigResponse(snap worker.StatusSnapshot) ConfigResponse
 	soloStatus, soloModel := deriveSoloState(snap)
 	return ConfigResponse{
 		GatewayURL:        snap.GatewayURL,
+		GatewayPinned:     snap.GatewayPinned,
 		WorkerName:        snap.WorkerName,
 		AccountEmail:      snap.AccountEmail,
 		HasWorkerToken:    strings.TrimSpace(snap.WorkerToken) != "",

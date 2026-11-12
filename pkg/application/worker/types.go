@@ -46,6 +46,7 @@ type StartParams struct {
 type UpdateSettings struct {
 	GatewayURL        string
 	GatewayURLSet     bool
+	GatewayPinned     *bool
 	WorkerToken       string
 	WorkerTokenSet    bool
 	WorkerName        string
@@ -79,6 +80,8 @@ type StatusSnapshot struct {
 	Arch                  string                      `json:"arch"`
 	MachineID             string                      `json:"machineId"`
 	GatewayURL            string                      `json:"gatewayUrl"`
+	GatewayPinned         bool                        `json:"gatewayPinned,omitempty"`
+	BootstrapVersion      uint64                      `json:"bootstrapVersion,omitempty"`
 	WorkerToken           string                      `json:"-"`
 	HasWorkerToken        bool                        `json:"hasWorkerToken"`
 	BrowserAuthPending    bool                        `json:"browserAuthPending,omitempty"`

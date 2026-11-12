@@ -108,6 +108,7 @@ func (e *Engine) ensurePreStartGPUsLocked(ctx context.Context) (bool, error) {
 	if alreadyRunning {
 		return true, nil
 	}
+	e.RefreshNetworkBootstrap(ctx)
 
 	gwURL, _, hasDetected, err := e.validatePreStartTokenAndGateway()
 	if err != nil {

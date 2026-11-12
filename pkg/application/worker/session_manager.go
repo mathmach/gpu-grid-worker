@@ -72,6 +72,10 @@ func (e *Engine) workerLoop(
 		if !sleepWithContext(ctx, delay) {
 			return
 		}
+		if nextGW, nextWS, migrated := e.resolveMigratedReconnectEndpoint(ctx, gwHTTP); migrated {
+			gwHTTP = nextGW
+			wsURL = nextWS
+		}
 		localPort = e.currentLocalPort()
 	}
 }

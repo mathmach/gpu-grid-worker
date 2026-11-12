@@ -43,9 +43,23 @@ func (e *Engine) loadPersistedConfig() {
 }
 
 func (e *Engine) applyPersistedFields(cfg PersistedConfig) {
+	e.applyPersistedBootstrapState(cfg)
 	e.applyPersistedEndpointAndIdentity(cfg)
 	e.applyPersistedRoutingAndSchedule(cfg)
 	e.applyPersistedUIAndAccount(cfg)
+}
+
+func (e *Engine) applyPersistedBootstrapState(cfg PersistedConfig) {
+	e.gatewayPinned = cfg.GatewayPinned
+	e.bootstrapVersion = cfg.BootstrapVersion
+	if len(cfg.BootstrapURLs) > 0 {
+		normURLs, err := nodecore.NormalizeBootstrapDiscoveryURLList(cfg.BootstrapURLs, e.allowInsecureWS)
+		if err != nil {
+			e.recordConfigFieldWarning("bootstrapUrls", err)
+			return
+		}
+		e.discoveredBootstrapURLs = normURLs
+	}
 }
 
 func (e *Engine) applyPersistedUIAndAccount(cfg PersistedConfig) {
@@ -123,11 +137,14 @@ func (e *Engine) applyPersistedRoutingAndSchedule(cfg PersistedConfig) {
 }
 
 func (e *Engine) applyBootOverrides(boot BootConfig) {
+	e.allowInsecureWS = boot.AllowInsecureWS
+	e.applyBootBootstrapOverrides(boot)
 	if strings.TrimSpace(boot.GatewayURL) != "" {
 		if normGW, err := e.validateAndNormalizeGateway(boot.GatewayURL); err != nil {
 			e.recordConfigFieldWarning("gatewayUrl", err)
 		} else {
 			e.gatewayURL = normGW
+			e.bootGatewayPinned = true
 		}
 	}
 	if bootTok := strings.TrimSpace(boot.Token); bootTok != "" {
@@ -146,9 +163,21 @@ func (e *Engine) applyBootOverrides(boot BootConfig) {
 		e.enabledBackendsSet = true
 		e.enabledBackends = NormalizeBackendList(boot.EnabledBackends)
 	}
-	e.allowInsecureWS = boot.AllowInsecureWS
 	e.cdnModelsBaseURL = strings.TrimRight(strings.TrimSpace(boot.CDNModelsBaseURL), "/")
 	e.applyBootScheduleAndTimers(boot)
+}
+
+func (e *Engine) applyBootBootstrapOverrides(boot BootConfig) {
+	if !boot.BootstrapURLsExplicit {
+		return
+	}
+	normURLs, err := nodecore.NormalizeBootstrapDiscoveryURLList(boot.BootstrapURLs, e.allowInsecureWS)
+	if err != nil {
+		e.recordConfigFieldWarning("bootstrapUrls", err)
+		return
+	}
+	e.discoveredBootstrapURLs = nil
+	e.bootstrapURLs = normURLs
 }
 
 func (e *Engine) applyBootScheduleAndTimers(boot BootConfig) {
@@ -186,6 +215,9 @@ func (e *Engine) applyBootScheduleAndTimers(boot BootConfig) {
 func (e *Engine) buildPersistedConfigLocked() PersistedConfig {
 	return PersistedConfig{
 		GatewayURL:       e.gatewayURL,
+		GatewayPinned:    e.gatewayPinned,
+		BootstrapVersion: e.bootstrapVersion,
+		BootstrapURLs:    append([]string(nil), e.discoveredBootstrapURLs...),
 		WorkerToken:      e.workerToken,
 		AccountEmail:     e.accountEmail,
 		WorkerName:       e.workerName,

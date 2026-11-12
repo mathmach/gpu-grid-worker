@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"strings"
 
 	"github.com/mathmach/gpu-grid-worker/pkg/domain/derr"
@@ -12,6 +13,7 @@ type mutableConfigState struct {
 	language           string
 	uiMode             string
 	gatewayURL         string
+	gatewayPinned      bool
 	workerToken        string
 	accountEmail       string
 	workerName         string
@@ -30,6 +32,7 @@ type settingsCommitEffects struct {
 	backendsChanged bool
 	modelsChanged   bool
 	schedChanged    bool
+	unpinnedGateway bool
 	prevPaused      bool
 	wasDraining     bool
 	backends        []string
@@ -44,7 +47,7 @@ func wantsScheduleMutation(s UpdateSettings) bool {
 }
 
 func wantsRunningLockedMutation(s UpdateSettings) bool {
-	return s.GatewayURLSet || strings.TrimSpace(s.GatewayURL) != "" ||
+	return s.GatewayURLSet || strings.TrimSpace(s.GatewayURL) != "" || s.GatewayPinned != nil ||
 		s.WorkerTokenSet || strings.TrimSpace(s.WorkerToken) != "" ||
 		s.WorkerNameSet || strings.TrimSpace(s.WorkerName) != "" ||
 		s.SelectedIDsSet || len(s.SelectedIDs) > 0
@@ -55,6 +58,7 @@ func (e *Engine) captureMutableConfigLocked() mutableConfigState {
 		language:           e.language,
 		uiMode:             e.uiMode,
 		gatewayURL:         e.gatewayURL,
+		gatewayPinned:      e.gatewayPinned,
 		workerToken:        e.workerToken,
 		accountEmail:       e.accountEmail,
 		workerName:         e.workerName,
@@ -74,6 +78,7 @@ func (e *Engine) restoreMutableConfigLocked(st mutableConfigState) {
 	e.language = st.language
 	e.uiMode = st.uiMode
 	e.gatewayURL = st.gatewayURL
+	e.gatewayPinned = st.gatewayPinned
 	e.workerToken = st.workerToken
 	e.accountEmail = st.accountEmail
 	e.workerName = st.workerName
@@ -147,6 +152,7 @@ func (e *Engine) commitSettingsTransaction(s UpdateSettings, normGW string, sche
 		backendsChanged: backendsChanged,
 		modelsChanged:   modelsChanged,
 		schedChanged:    schedMut,
+		unpinnedGateway: prev.gatewayPinned && !cand.gatewayPinned,
 		prevPaused:      prevPaused,
 		wasDraining:     wasDraining,
 		backends:        e.effectiveBackendsLocked(),
@@ -169,6 +175,9 @@ func (e *Engine) commitSettingsTransaction(s UpdateSettings, normGW string, sche
 }
 
 func (e *Engine) dispatchPostCommitEffects(fx settingsCommitEffects, idleNow int) error {
+	if fx.unpinnedGateway {
+		e.RefreshNetworkBootstrap(context.Background())
+	}
 	if fx.backendsChanged {
 		e.syncSoloEnabledBackends()
 		fx.backends = e.refreshEffectiveBackendsFromSupervisor()
@@ -241,7 +250,13 @@ func buildValidatedConfigCandidate(
 
 func applyValidatedIdentityAndAppearance(cand *mutableConfigState, detected []protocol.GpuInfo, s UpdateSettings, normGW string) error {
 	if normGW != "" {
+		if normGW != cand.gatewayURL {
+			cand.gatewayPinned = true
+		}
 		cand.gatewayURL = normGW
+	}
+	if s.GatewayPinned != nil {
+		cand.gatewayPinned = *s.GatewayPinned
 	}
 	if err := applyValidatedTokenAndName(cand, s); err != nil {
 		return err
