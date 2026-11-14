@@ -14,3 +14,14 @@ id = "huggingface-access-token"
 description = "Hugging Face Access Token"
 regex = '''\bhf_[A-Za-z0-9]{24,}\b'''
 tags = ["secret", "huggingface"]
+
+[allowlist]
+description = "Ignore gitignored build output, local runtime caches, and git internals"
+paths = [
+  '''(?:^|/)dist/''',
+  '''(?:^|/)build/''',
+  '''(?:^|/)coverage/''',
+  '''(?:^|/)data/''',
+  '''(?:^|/)assets/''',
+  '''(?:^|/)\.git/''',
+]

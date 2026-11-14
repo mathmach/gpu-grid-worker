@@ -163,6 +163,10 @@ func TestHasGraphicalDisplayAndSubprocessEnvSecretSanitization(t *testing.T) {
 		"HF_TOKEN=hf_secret_token_should_never_leak",
 		"HF_HUB_TOKEN=hf_hub_secret_should_never_leak",
 		"HUGGING_FACE_HUB_TOKEN=hf_legacy_secret_should_never_leak",
+		"MODEL_HUB_TOKENS=huggingface=hf_x,civitai=cv_y",
+		"MODELSCOPE_API_TOKEN=ms_secret_should_never_leak",
+		"CIVITAI_API_KEY=cv_secret_should_never_leak",
+		"OLLAMA_API_KEY=ol_secret_should_never_leak",
 		"UPSTREAM_API_SECRET=secret_should_never_leak",
 		"MAIL_SERVER_PASSWORD=password_should_never_leak",
 		"GRID_WORKER_TOKEN=wk_secret_1",
@@ -180,7 +184,11 @@ func TestHasGraphicalDisplayAndSubprocessEnvSecretSanitization(t *testing.T) {
 	if envMap["SAFE_CUSTOM_FLAG"] != "enabled" {
 		t.Fatalf("expected non-sensitive env var preserved, got %v", got)
 	}
-	for _, forbidden := range []string{"HF_TOKEN", "HF_HUB_TOKEN", "HUGGING_FACE_HUB_TOKEN", "UPSTREAM_API_SECRET", "MAIL_SERVER_PASSWORD", "GRID_WORKER_TOKEN", "GPU_GRID_TOKEN"} {
+	for _, forbidden := range []string{
+		"HF_TOKEN", "HF_HUB_TOKEN", "HUGGING_FACE_HUB_TOKEN",
+		"MODEL_HUB_TOKENS", "MODELSCOPE_API_TOKEN", "CIVITAI_API_KEY", "OLLAMA_API_KEY",
+		"UPSTREAM_API_SECRET", "MAIL_SERVER_PASSWORD", "GRID_WORKER_TOKEN", "GPU_GRID_TOKEN",
+	} {
 		if val, exists := envMap[forbidden]; exists {
 			t.Fatalf("expected sensitive env key %s stripped from subprocess env, found %q", forbidden, val)
 		}

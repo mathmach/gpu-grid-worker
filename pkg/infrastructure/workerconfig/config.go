@@ -535,13 +535,18 @@ func sanitizeSubprocessEnviron(rawEnv []string) []string {
 
 func isSensitiveSubprocessEnvKey(key string) bool {
 	upper := strings.ToUpper(strings.TrimSpace(key))
-	for _, suffix := range []string{"_SECRET", "_SECRET_KEY", "_PASSWORD", "_TOKEN", "_API_KEY"} {
+	for _, suffix := range []string{"_SECRET", "_SECRET_KEY", "_PASSWORD", "_TOKEN", "_TOKENS", "_API_KEY"} {
 		if strings.HasSuffix(upper, suffix) {
 			return true
 		}
 	}
+	for _, prefix := range []string{"MODEL_HUB_", "MODELSCOPE_", "CIVITAI_"} {
+		if strings.HasPrefix(upper, prefix) {
+			return true
+		}
+	}
 	switch upper {
-	case "GRID_WORKER_TOKEN", "GPU_GRID_TOKEN", "HF_TOKEN", "HF_HUB_TOKEN", "HUGGING_FACE_HUB_TOKEN":
+	case "GRID_WORKER_TOKEN", "GPU_GRID_TOKEN", "HF_TOKEN", "HF_HUB_TOKEN", "HUGGING_FACE_HUB_TOKEN", "OLLAMA_API_KEY":
 		return true
 	default:
 		return false

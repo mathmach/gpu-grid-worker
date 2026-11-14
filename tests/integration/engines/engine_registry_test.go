@@ -93,14 +93,14 @@ func TestSafetensorsSidecarSupervisionStopsCleanly(t *testing.T) {
 		ExtraArgs:  []string{"-test.run=^TestEngineSubprocessHelper$", "--", "sidecar-hold"},
 	})
 	args, err := sidecarExec.BuildArgs(nodecore.PoolLaunchSpec{
-		ModelPath:  "hf-model-dir",
+		ModelPath:  "local-model-dir",
 		ListenPort: 19003,
 	})
 	if err != nil || !slices.Contains(args, "--model") {
 		t.Fatalf("unexpected custom sidecar args=%v err=%v", args, err)
 	}
 	proc, err := sidecarExec.SpawnPool(context.Background(), nodecore.PoolLaunchSpec{
-		ModelPath:  "hf-model-dir",
+		ModelPath:  "local-model-dir",
 		ListenPort: 19003,
 	})
 	if err != nil {

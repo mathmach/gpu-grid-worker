@@ -88,18 +88,18 @@ var statusMapEN = map[string]string{
 
 var pauseReasonMapPT = map[string]string{
 	"idle_backend_unavailable":    "Sensor de ociosidade indisponível no sistema",
-	"user_active":                 "Auto-Pause: atividade local detectada no PC",
+	"user_active":                 "Auto-pausa: atividade local detectada no PC",
 	"manual_pause":                "Pausado manualmente pelo provedor",
 	"Paused manually by provider": "Pausado manualmente pelo provedor",
-	"Smart Auto-Pause: local desktop activity detected": "Auto-Pause: atividade local detectada no PC",
+	"Smart Auto-Pause: local desktop activity detected": "Auto-pausa: atividade local detectada no PC",
 }
 
 var pauseReasonMapEN = map[string]string{
 	"idle_backend_unavailable":    "OS idle sensor unavailable",
-	"user_active":                 "Smart Auto-Pause: local desktop activity detected",
+	"user_active":                 "Auto-pause: local desktop activity detected",
 	"manual_pause":                "Paused manually by provider",
 	"Paused manually by provider": "Paused manually by provider",
-	"Smart Auto-Pause: local desktop activity detected": "Smart Auto-Pause: local desktop activity detected",
+	"Smart Auto-Pause: local desktop activity detected": "Auto-pause: local desktop activity detected",
 }
 
 func FormatStatusLabel(lang, raw string) string {
@@ -142,18 +142,18 @@ var simpleStatusPT = map[string]string{
 	"STARTING_SOLO":         "Preparando motor de IA...",
 	"PAUSE_DRAINING":        "Finalizando tarefa para pausar...",
 	"DRAINING":              "Finalizando tarefa atual...",
-	"INFERRING":             "Processando IA agora (gerando ganhos)",
-	"PROCESSING":            "Processando IA agora (gerando ganhos)",
-	"SOLO_READY":            "Ativo — pronto para tarefas de IA",
-	"READY":                 "Ativo — pronto para tarefas de IA",
-	"STANDBY":               "Ativo — aguardando tarefas na rede",
-	"CONNECTED":             "Conectado — aguardando alocação",
-	"WAITING_PEERS":         "Conectado — aguardando parceiros de rede",
+	"INFERRING":             "Processando tarefa",
+	"PROCESSING":            "Processando tarefa",
+	"SOLO_READY":            "Ativo: pronto para tarefas",
+	"READY":                 "Ativo: pronto para tarefas",
+	"STANDBY":               "Ativo: aguardando tarefas",
+	"CONNECTED":             "Conectado: aguardando alocação",
+	"WAITING_PEERS":         "Conectado: aguardando pares de rede",
 	"WAITING_PLATFORM_RATE": "Aguardando configuração da tarifa base na plataforma",
 	"REBALANCING":           "Aquecendo modelo na GPU...",
 	"QUARANTINED":           "Em verificação automática de saúde",
-	"HARDWARE_PROBE_ERROR":  "Falha ao detectar GPU Vulkan — verifique os drivers",
-	"ERROR":                 "Atenção — verifique o aviso acima",
+	"HARDWARE_PROBE_ERROR":  "Falha ao detectar GPU Vulkan: verifique os drivers",
+	"ERROR":                 "Atenção: verifique o aviso acima",
 }
 
 var simpleStatusEN = map[string]string{
@@ -165,18 +165,18 @@ var simpleStatusEN = map[string]string{
 	"STARTING_SOLO":         "Preparing AI engine...",
 	"PAUSE_DRAINING":        "Finishing active job to pause...",
 	"DRAINING":              "Finishing current job...",
-	"INFERRING":             "Processing AI job now (earning)",
-	"PROCESSING":            "Processing AI job now (earning)",
-	"SOLO_READY":            "Active — ready for AI jobs",
-	"READY":                 "Active — ready for AI jobs",
-	"STANDBY":               "Active — waiting for network jobs",
-	"CONNECTED":             "Connected — awaiting assignment",
-	"WAITING_PEERS":         "Connected — waiting for pool peers",
+	"INFERRING":             "Processing task",
+	"PROCESSING":            "Processing task",
+	"SOLO_READY":            "Active: ready for tasks",
+	"READY":                 "Active: ready for tasks",
+	"STANDBY":               "Active: waiting for tasks",
+	"CONNECTED":             "Connected: awaiting assignment",
+	"WAITING_PEERS":         "Connected: waiting for pool peers",
 	"WAITING_PLATFORM_RATE": "Awaiting platform compute rate configuration",
 	"REBALANCING":           "Warming up model on GPU...",
 	"QUARANTINED":           "Running automatic health check",
-	"HARDWARE_PROBE_ERROR":  "Vulkan GPU detection failed — check graphics drivers",
-	"ERROR":                 "Attention — check warning above",
+	"HARDWARE_PROBE_ERROR":  "Vulkan GPU detection failed: check graphics drivers",
+	"ERROR":                 "Attention: check warning above",
 }
 
 func FormatSimpleStatus(lang string, s worker.StatusSnapshot) string {

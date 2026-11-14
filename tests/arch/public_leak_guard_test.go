@@ -2,7 +2,9 @@ package arch_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -97,4 +99,74 @@ func assertZeroProprietaryTokens(t *testing.T, path string, forbidden []string) 
 			t.Errorf("proprietary or gateway-only token %q leaked into public worker repo file %s", tok, path)
 		}
 	}
+}
+
+func TestWorkerGitIgnoreAndZeroTrackedBuildArtifacts(t *testing.T) {
+	root := findRepoRoot(t)
+	assertWorkerGitIgnoreContainsRequiredLines(t, filepath.Join(root, ".gitignore"), []string{
+		"/dist/",
+		"/build/",
+		"/out/",
+		"/coverage/",
+		"node_modules/",
+		".next/",
+		"_next/",
+	})
+	assertWorkerZeroTrackedGeneratedArtifacts(t, root)
+}
+
+func assertWorkerGitIgnoreContainsRequiredLines(t *testing.T, gitignorePath string, required []string) {
+	t.Helper()
+	raw, err := os.ReadFile(gitignorePath)
+	if err != nil {
+		t.Fatalf("read %s: %v", gitignorePath, err)
+	}
+	present := map[string]bool{}
+	for _, line := range strings.Split(string(raw), "\n") {
+		present[strings.TrimSpace(strings.TrimRight(line, "\r"))] = true
+	}
+	for _, req := range required {
+		if !present[req] {
+			t.Errorf("%s is missing required ignore rule %q", gitignorePath, req)
+		}
+	}
+}
+
+func assertWorkerZeroTrackedGeneratedArtifacts(t *testing.T, root string) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(root, ".git")); err != nil {
+		return
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		return
+	}
+	out, err := exec.Command("git", "-C", root, "ls-files").Output()
+	if err != nil {
+		t.Fatalf("git ls-files %s: %v", root, err)
+	}
+	for _, rawLine := range strings.Split(string(out), "\n") {
+		rel := strings.TrimSpace(strings.TrimRight(rawLine, "\r"))
+		if rel != "" && isForbiddenWorkerTrackedArtifact(filepath.ToSlash(rel)) {
+			t.Errorf("generated build artifact %q must not be tracked in git", rel)
+		}
+	}
+}
+
+func isForbiddenWorkerTrackedArtifact(slash string) bool {
+	for _, prefix := range []string{"dist/", "build/", "out/", "coverage/", "assets/", "data/"} {
+		if strings.HasPrefix(slash, prefix) {
+			return true
+		}
+	}
+	for _, part := range strings.Split(slash, "/") {
+		if slices.Contains([]string{".next", "_next", "node_modules"}, part) {
+			return true
+		}
+	}
+	for _, suffix := range []string{".exe", ".dll", ".so", ".dylib", ".test", ".tsbuildinfo"} {
+		if strings.HasSuffix(slash, suffix) {
+			return true
+		}
+	}
+	return false
 }

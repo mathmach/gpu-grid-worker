@@ -99,20 +99,20 @@ func buildAuthCallbackSuccessHTML(lang, email, gatewayURL string) string {
 	if lang == "pt-BR" {
 		return renderCallbackCardHTML(
 			"pt-BR",
-			"Conta Conectada — GPU Grid Worker",
+			"GPU Grid Worker · Autenticado",
 			"#22c55e",
-			"Worker Conectado com Sucesso!",
-			fmt.Sprintf("A conta <strong>%s</strong> foi vinculada automaticamente ao seu GPU Grid Worker. Você já pode voltar para o aplicativo para iniciar o compartilhamento.", safeEmail),
+			"Worker autenticado",
+			fmt.Sprintf("A conta <strong>%s</strong> foi vinculada ao seu GPU Grid Worker. Você já pode fechar esta aba e voltar para o aplicativo.", safeEmail),
 			dashHref,
 			"Voltar ao Meu Painel",
 		)
 	}
 	return renderCallbackCardHTML(
 		"en",
-		"Account Linked — GPU Grid Worker",
+		"GPU Grid Worker · Authenticated",
 		"#22c55e",
-		"Worker Linked Successfully!",
-		fmt.Sprintf("Account <strong>%s</strong> is now configured in your GPU Grid Worker. Return to the desktop app to start sharing your GPU.", safeEmail),
+		"Worker authenticated",
+		fmt.Sprintf("Account <strong>%s</strong> is now linked to your GPU Grid Worker. Return to the desktop app to start sharing your GPU.", safeEmail),
 		dashHref,
 		"Return to My Dashboard",
 	)
@@ -123,7 +123,7 @@ func buildAuthCallbackErrorHTML(lang, errMsg string) string {
 	if lang == "pt-BR" {
 		return renderCallbackCardHTML(
 			"pt-BR",
-			"Falha na Autenticação — GPU Grid Worker",
+			"Falha na Autenticação · GPU Grid Worker",
 			"#ef4444",
 			"Não foi possível concluir a vinculação",
 			safeMsg+" Volte ao aplicativo GPU Grid Worker e clique novamente em Entrar com o Navegador.",
@@ -133,7 +133,7 @@ func buildAuthCallbackErrorHTML(lang, errMsg string) string {
 	}
 	return renderCallbackCardHTML(
 		"en",
-		"Authentication Failed — GPU Grid Worker",
+		"Authentication Failed · GPU Grid Worker",
 		"#ef4444",
 		"Could not complete Worker linking",
 		safeMsg+" Return to the GPU Grid Worker desktop app and click Sign In with Browser again.",
